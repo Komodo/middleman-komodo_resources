@@ -25,7 +25,7 @@ module Middleman
 
             namespace :resources
             desc 'resources', 'Import data from Komodo Resources'
-
+            
             def self.source_root
                 ENV['MM_ROOT']
             end
@@ -36,6 +36,7 @@ module Middleman
             end
 
             def resources
+                @resources = []
                 @github = Github.new basic_auth: "#{ENV['GITHUB_ID']}:#{ENV['GITHUB_SECRET']}"
                 
                 categories = get_github_yaml 'categories.yml'
@@ -45,6 +46,15 @@ module Middleman
                 end
                 
                 File.write "#{Dir.pwd}/data/resources/categories.yml", categories.to_yaml
+                
+                popular = @resources.sort_by { |v,k| v["stargazers_count"] || 0 }.reverse
+                File.write "#{Dir.pwd}/data/resources/popular.yml", popular.to_yaml
+                
+                downloads = @resources.sort_by { |v,k| v["download_count"] || 0 }.reverse
+                File.write "#{Dir.pwd}/data/resources/downloads.yml", downloads.to_yaml
+                
+                all = @resources.sort_by { |v,k| v["last_update"]}.reverse
+                File.write "#{Dir.pwd}/data/resources/all.yml", all.to_yaml
             end
             
             private
@@ -74,7 +84,8 @@ module Middleman
                     puts "Collecting data for #{title}"
                     
                     resource = parse_resource_basics(title, resource, config)
-            
+                    resource["category"] = category
+                    
                     # Retrieve repo and readme from github
                     if resource["is_github"]
                         resource = parse_github_data(title, resource, config)
@@ -111,7 +122,10 @@ module Middleman
                     FileUtils.mkdir "#{Dir.pwd}/data/resources"
                 end
                 
-                File.write "#{Dir.pwd}/data/resources/#{category["resource"]}", resources.to_yaml
+                @resources += resources.values
+                
+                File.write "#{Dir.pwd}/data/resources/#{category["resource"]}",
+                            resources.values.sort_by { |v,k| v["last_update"] }.reverse.to_yaml
                 
                 return category
                 
