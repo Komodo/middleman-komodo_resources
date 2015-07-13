@@ -37,12 +37,25 @@ module Middleman
 
             def resources
                 @resources = []
-                @github = Github.new basic_auth: "#{ENV['GITHUB_ID']}:#{ENV['GITHUB_SECRET']}"
+                
+                @github = Github.new do |c|
+                    c.basic_auth = "#{ENV['GITHUB_ID']}:#{ENV['GITHUB_SECRET']}"
+                    c.stack do |builder|
+                        builder.use Faraday::HttpCache, store: Rails.cache
+                    end
+                end
+                
+                threads = []
                 
                 categories = get_github_yaml 'categories.yml'
                 categories.each_with_index() do |category,i|
                     puts "\nProcessing category: #{category["name"]}"
-                    categories[i] = parse_category(category)
+                    threads[i] = Thread.new{parse_category(category)}
+                end
+                
+                categories.each_with_index() do |category,i|
+                    threads[i].join
+                    categories[i] = threads[i].value
                 end
                 
                 File.write "#{Dir.pwd}/data/resources/categories.yml", categories.to_yaml
@@ -76,45 +89,30 @@ module Middleman
                 cached = get_yaml(category["resource"]) || {}
                 config = get_github_yaml(category["resource"]) || {}
                 resources = cached.merge config
+                resources_min = {}
                 
                 category["resources"] = 0
                 
+                threads = {}
+                
                 resources.each() do |title,resource|
-                    
                     puts "Collecting data for #{title}"
+                    threads[title] = Thread.new{parse_resource(title, resource, category, config)}
+                end # resource.each
+                
+                resources.each() do |title,_|
                     
-                    resource = parse_resource_basics(title, resource, config)
-                    resource["category"] = category
+                    threads[title].join
+                    _resource = threads[title].value
                     
-                    # Retrieve repo and readme from github
-                    if resource["is_github"]
-                        resource = parse_github_data(title, resource, config)
-                        
-                        unless resource
-                            # Something went wrong, remove this resource from generated data
-                            resources.delete(title)
-                            next
-                        end
+                    if _resource
+                        resources[title] = _resource
+                        resources_min[title] = parse_resource_min(
+                                                    Marshal.load(Marshal.dump(_resource)))
+                        category["resources"] += 1
+                    else
+                        resources.delete(title)
                     end
-                    
-                    # Parse readme with markup
-                    if resource.has_key? "readme"
-                        begin
-                            filename = "readme.md"
-                            if resource["readme"].has_key? "name"
-                                filename = resource["readme"]["name"]
-                            end
-                            resource["readme"]["content"] = GitHub::Markup.render(
-                                                                filename,
-                                                                resource["readme"]["content"].force_encoding("UTF-8") )
-                        rescue Exception => e
-                            puts "Error parsing readme: #{e.message}"
-                            resource.delete("readme")
-                        end
-                    end
-                    
-                    resources[title] = resource
-                    category["resources"] += 1
                     
                 end # resource.each
                 
@@ -126,9 +124,111 @@ module Middleman
                 
                 File.write "#{Dir.pwd}/data/resources/#{category["resource"]}",
                             resources.values.sort_by { |v,k| v["last_update"] }.reverse.to_yaml
+                            
+                File.write "#{Dir.pwd}/data/resources/min_#{category["resource"]}",
+                            resources_min.values.sort_by { |v,k| v["last_update"] }.reverse.to_yaml
                 
                 return category
                 
+            end
+            
+            def parse_resource_min(resource)
+                #resource
+                fields = ["id", "name", "full_name", "owner", "html_url",
+                          "description", "fork", "created_at", "updated_at",
+                          "pushed_at", "homepage", "stargazers_count",
+                          "watchers_count", "has_issues", "has_downloads",
+                          "forks_count", "open_issues_count", "default_branch",
+                          "subscribers_count", "title", "releases", "last_update",
+                          "is_github", "category", "download_count"]
+                r = sanitize(resource, fields)
+               
+                # resource.owner
+                fields = ["login", "id", "avatar_url", "html_url"]
+                r["owner"] = sanitize(r["owner"], fields) if r.has_key? "owner"
+                
+                # resource.releases
+                if r.has_key? "releases" and r["releases"]
+                    fields = ["id", "name", "prerelease", "created_at",
+                              "published_at","assets"]
+                    r["releases"].each_with_index() do |v,i|
+                        r["releases"][i] = sanitize(v, fields)
+                        
+                        # resource.releases.assets
+                        if r["releases"][i].has_key? "assets" and r["releases"][i]["assets"]
+                            _fields = ["id", "name", "content_type",
+                                       "download_count", "browser_download_url"]
+                            r["releases"][i]["assets"].each_with_index() do |_v,_i|
+                                r["releases"][i]["assets"][_i] = sanitize(_v, _fields)
+                            end
+                        end
+                        
+                    end #releases loop
+                    
+                end # has key releases
+                
+                return r
+            end
+            
+            def parse_resource(title, resource, category, config)
+                resource = parse_resource_basics(title, resource, config)
+                resource["category"] = category
+                
+                # Retrieve repo and readme from github
+                if resource["is_github"]
+                    resource = parse_github_data(title, resource, config)
+                    
+                    unless resource
+                        return false
+                    end
+                end
+                
+                # Parse readme with markup
+                if resource.has_key? "readme"
+                    begin
+                        resource["readme"] = parse_readme(resource)
+                    rescue Exception => e
+                        puts "Error parsing readme: #{e.message}"
+                        resource.delete("readme")
+                        return false
+                    end
+                end
+                
+                return resource
+            end
+            
+            def parse_readme(resource)
+                unless resource.has_key? "readme"
+                    return
+                end
+                
+                readme = resource["readme"]
+                
+                filename = "readme.md"
+                if readme.has_key? "name"
+                    filename = readme["name"]
+                end
+                readme["content"] = GitHub::Markup.render(
+                                                    filename,
+                                                    readme["content"].force_encoding("UTF-8") )
+
+                if resource["is_github"] and resource.has_key? "html_url"
+                    branch = "master"
+                    if resource.has_key? "default_branch"
+                        branch = resource["default_branch"]
+                    end
+                    
+                    contents = readme["content"]
+                    
+                    linkPath = resource["html_url"] + "/blob/#{branch}/"
+                    contents = contents.sub(/<a href="(\w)/, "<a href=\"#{linkPath}\\1")
+                    imgPath = resource["html_url"] + "/raw/#{branch}/"
+                    contents = contents.sub(/<img src="(\w)/, "<img src=\"#{imgPath}\\1")
+                    
+                    readme["content"] = contents
+                end
+                
+                return readme
             end
             
             def parse_resource_basics(title, resource, config)
@@ -222,6 +322,18 @@ module Middleman
                 end
                 
                 return resource
+            end
+            
+            def sanitize(ob, keys)
+                _ob = {}
+                
+                ob.each do |k,v|
+                    if keys.include? k
+                        _ob[k] = v
+                    end
+                end
+                
+                return _ob
             end
                 
         end # class

@@ -7,6 +7,7 @@ gemspec
 
 gem "github_api"
 gem "github-markup"
+gem "faraday-http-cache"
 
 group :development do
   gem 'rake'
