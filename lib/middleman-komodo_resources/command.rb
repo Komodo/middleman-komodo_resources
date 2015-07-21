@@ -49,7 +49,7 @@ module Middleman
                 
                 categories = get_github_yaml 'categories.yml'
                 categories.each_with_index() do |category,i|
-                    puts "\nProcessing category: #{category["name"]}"
+                    puts "\n\nProcessing category: #{category["name"]}"
                     threads[i] = Thread.new{parse_category(category)}
                 end
                 
@@ -96,7 +96,7 @@ module Middleman
                 threads = {}
                 
                 resources.each() do |title,resource|
-                    puts "Collecting data for #{title}"
+                    puts "\nCollecting data for #{title}"
                     threads[title] = Thread.new{parse_resource(title, resource, category, config)}
                 end # resource.each
                 
@@ -123,7 +123,7 @@ module Middleman
                 @resources += resources.values
                 
                 File.write "#{Dir.pwd}/data/resources/#{category["resource"]}",
-                            resources.values.sort_by { |v,k| v["last_update"] }.reverse.to_yaml
+                            resources.values.compact.sort_by { |v,k| v["last_update"] }.reverse.to_yaml
                             
                 File.write "#{Dir.pwd}/data/resources/min_#{category["resource"]}",
                             resources_min.values.sort_by { |v,k| v["last_update"] }.reverse.to_yaml
@@ -188,7 +188,7 @@ module Middleman
                     begin
                         resource["readme"] = parse_readme(resource)
                     rescue Exception => e
-                        puts "Error parsing readme: #{e.message}"
+                        puts "\nError parsing readme: #{e.message}"
                         resource.delete("readme")
                         return false
                     end
@@ -263,7 +263,7 @@ module Middleman
                 begin
                     resource["last_update"] = DateTime.parse(resource["last_update"].to_s).iso8601()
                 rescue TypeError => e
-                    puts "Error parsing last_update: #{resource["last_update"]} - #{e.message}"
+                    puts "\nError parsing last_update: #{resource["last_update"]} - #{e.message}"
                     resource["last_update"] = '2010-01-01T01:00:00Z'
                 end
                 
@@ -285,11 +285,19 @@ module Middleman
                 begin
                     # Merge resource data with data from GitHub
                     ghData = @github.repos.get user, repo
-                    resource = ghData.to_hash().merge resource
+                    ghData = ghData.to_hash()
+                    if ghData.has_key? "message" and ghData["message"] == "Moved Permanently"
+                        msg = "\n--------------"
+                        msg += "\nREDIRECTED: #{title} (#{resource["full_name"]}) has moved permanently, please update the yaml to use the new url"
+                        msg += "\n--------------"
+                        puts msg
+                        return false
+                    end
+                    resource = ghData.merge resource
                     resource["last_update"] = resource["pushed_at"]
-                rescue Github::Error::ServiceError => e
-                    puts "Error: #{e.message}"
-                    puts "Stripping resource from local database"
+                rescue Github::Error::ServiceError, Faraday::ConnectionFailed, NoMethodError => e
+                    puts "\nError: #{e.message}"
+                    puts "\nStripping resource '#{title}' from local database"
                     return false
                 end
                 
@@ -299,8 +307,8 @@ module Middleman
                         data = @github.repos.contents.readme(user, repo)
                         contents = Base64.decode64(data["content"])
                         resource["readme"] = { "content" => contents, "name" => data["name"] }
-                    rescue Github::Error::ServiceError => e
-                        puts "Error retrieving readme: #{e.message}"
+                    rescue Github::Error::ServiceError, Faraday::ConnectionFailed, NoMethodError => e
+                        puts "\nError retrieving readme: #{e.message}"
                     end
                 end
                 
@@ -317,8 +325,8 @@ module Middleman
                             resource["download_count"] += asset["download_count"]
                         end
                     end
-                rescue Github::Error::ServiceError => e
-                    puts "Error retrieving releases: #{e.message}"
+                rescue Github::Error::ServiceError, Faraday::ConnectionFailed, NoMethodError => e
+                    puts "\nError retrieving releases (#{title}): #{e.message}"
                 end
                 
                 return resource
