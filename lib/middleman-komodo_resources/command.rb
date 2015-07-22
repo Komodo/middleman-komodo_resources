@@ -231,9 +231,9 @@ module Middleman
                     contents = readme["content"]
                     
                     linkPath = resource["html_url"] + "/blob/#{branch}/"
-                    contents = contents.gsub(/<a href="([a-zA-Z0-9_. %;-]+?)/, "<a href=\"#{linkPath}\\1\"")
+                    contents = contents.gsub(/<a href="([a-zA-Z][a-zA-Z0-9\/_. %;-]+?)/, "<a href=\"#{linkPath}\\1\"")
                     imgPath = resource["html_url"] + "/raw/#{branch}/"
-                    contents = contents.gsub(/<img src="([a-zA-Z0-9_. %;-]+?)"/, "<img src=\"#{imgPath}\\1\"")
+                    contents = contents.gsub(/<img src="([a-zA-Z][a-zA-Z0-9\/_. %;-]+?)"/, "<img src=\"#{imgPath}\\1\"")
                     
                     readme["content"] = contents
                 end
