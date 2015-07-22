@@ -203,14 +203,24 @@ module Middleman
                 end
                 
                 readme = resource["readme"]
-                
                 filename = "readme.md"
                 if readme.has_key? "name"
                     filename = readme["name"]
                 end
-                readme["content"] = GitHub::Markup.render(
-                                                    filename,
-                                                    readme["content"].force_encoding("UTF-8") )
+                
+                content = readme["content"].force_encoding("UTF-8")
+                
+                unless content
+                    return readme
+                end
+                
+                ext = File.extname(filename)
+                if ext == "" or ext.downcase == ".txt"
+                    readme["content"] = "<pre>" + content + "</pre>"
+                    return readme
+                end
+                
+                readme["content"] = GitHub::Markup.render( filename, content )
 
                 if resource["is_github"] and resource.has_key? "html_url"
                     branch = "master"
@@ -221,9 +231,9 @@ module Middleman
                     contents = readme["content"]
                     
                     linkPath = resource["html_url"] + "/blob/#{branch}/"
-                    contents = contents.sub(/<a href="(\w)/, "<a href=\"#{linkPath}\\1")
+                    contents = contents.gsub(/<a href="([a-zA-Z0-9_. %;-]+?)/, "<a href=\"#{linkPath}\\1\"")
                     imgPath = resource["html_url"] + "/raw/#{branch}/"
-                    contents = contents.sub(/<img src="(\w)/, "<img src=\"#{imgPath}\\1")
+                    contents = contents.gsub(/<img src="([a-zA-Z0-9_. %;-]+?)"/, "<img src=\"#{imgPath}\\1\"")
                     
                     readme["content"] = contents
                 end
@@ -296,7 +306,7 @@ module Middleman
                     resource = ghData.merge resource
                     resource["last_update"] = resource["pushed_at"]
                 rescue Github::Error::ServiceError, Faraday::ConnectionFailed, NoMethodError => e
-                    puts "\nError: #{e.message}"
+                    puts "\nGH Data Error: #{e.message}"
                     puts "\nStripping resource '#{title}' from local database"
                     return false
                 end
