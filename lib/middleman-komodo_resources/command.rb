@@ -13,6 +13,7 @@ require 'yaml'
 require 'base64'
 require 'date'
 require 'github/markup'
+require 'mime/types'
 
 module Middleman
     module Cli
@@ -283,6 +284,25 @@ module Middleman
                     host = URI.parse(resource["html_url"]).host.downcase
                     host = host.start_with?('www.') ? host[4..-1] : host
                     resource["is_github"] = host == "github.com"
+                end
+                
+                if resource.has_key? "raw_url" and ! resource["is_github"]
+                    raw = resource["raw_url"]
+                    type = MIME::Types.type_for(File.basename(raw)).first
+                    if type
+                        type = type.content_type
+                        resource["releases"] = [{
+                            "id" => raw,
+                            "name" => File.basename(raw),
+                            "assets" => [{
+                                "id" => raw,
+                                "name" => File.basename(raw),
+                                "content_type" => type,
+                                "download_count" => 0,
+                                "browser_download_url" => raw
+                            }]
+                        }]
+                    end
                 end
                 
                 return resource

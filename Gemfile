@@ -8,6 +8,9 @@ gemspec
 gem "github_api"
 gem "github-markup"
 gem "faraday-http-cache"
+gem "redcarpet"
+gem "RedCloth"
+gem "mime-types"
 
 group :development do
   gem 'rake'
