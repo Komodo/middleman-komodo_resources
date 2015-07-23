@@ -366,8 +366,7 @@ module Middleman
                                 isKsf = asset["browser_download_url"][-4..-1].downcase() == '.ksf'
                                 if ! exported and isKsf
                                     exported = true
-                                    
-                                        resource["ksf"] = parse_ksf(asset["browser_download_url"])
+                                    resource["ksf"] = parse_ksf(asset["browser_download_url"])
                                 end
                             rescue Exception => ex
                                 puts "\nError retrieving KSF (#{title}): #{ex.message}"
