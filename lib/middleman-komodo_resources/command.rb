@@ -233,8 +233,15 @@ module Middleman
                     
                     linkPath = resource["html_url"] + "/blob/#{branch}/"
                     contents = contents.gsub(/<a href="([a-zA-Z][a-zA-Z0-9\/_. %;-]+?)/, "<a href=\"#{linkPath}\\1\"")
+                    
                     imgPath = resource["html_url"] + "/raw/#{branch}/"
                     contents = contents.gsub(/<img src="([a-zA-Z][a-zA-Z0-9\/_. %;-]+?)"/, "<img src=\"#{imgPath}\\1\"")
+                    
+                    # Github automatically fixes blob urls to raw for images,
+                    # so we should too ...
+                    imgPath = resource["html_url"] + "/raw/#{branch}/"
+                    rx = /(<img src="https?:\/\/github.com\/[\w_-]+\/[\w_-]+)\/blob/
+                    contents = contents.gsub(rx, "\\1/raw")
                     
                     readme["content"] = contents
                 end
@@ -348,11 +355,23 @@ module Middleman
                     
                     resource["releases"] = []
                     resource["download_count"] = 0
+                    exported = false
                     
                     releases.each() do |release|
                         resource["releases"].push release.to_hash()
                         release.assets.each() do |asset|
                             resource["download_count"] += asset["download_count"]
+                            
+                            begin
+                                isKsf = asset["browser_download_url"][-4..-1].downcase() == '.ksf'
+                                if ! exported and isKsf
+                                    exported = true
+                                    
+                                        resource["ksf"] = parse_ksf(asset["browser_download_url"])
+                                end
+                            rescue Exception => ex
+                                puts "\nError retrieving KSF (#{title}): #{ex.message}"
+                            end
                         end
                     end
                 rescue Github::Error::ServiceError, Faraday::ConnectionFailed, NoMethodError => e
@@ -360,6 +379,38 @@ module Middleman
                 end
                 
                 return resource
+            end
+            
+            def parse_ksf(url)
+                require 'open-uri'
+                require 'tempfile'
+
+                file = Tempfile.new('ksf')
+                file.close()
+                
+                stream = open(url)
+                IO.copy_stream(stream, file.path)
+                
+                exporter = <<-eos
+
+import json
+export = locals()
+_export = {}
+for l in export.keys():
+    if l in ["export", "_export"]:
+        continue
+    if isinstance(export[l],dict):
+        _export[l] = export[l]
+
+print json.dumps(_export)
+                eos
+                
+                file = open(file.path, 'a')
+                file.write(exporter)
+                file.close()
+                
+                return `python2 #{file.path}`
+                
             end
             
             def sanitize(ob, keys)
