@@ -73,7 +73,7 @@ module Middleman
             
             private
             def get_github_yaml(file)
-                data = @github.repos.contents.get 'Komodo', 'Komodo-Resources', file
+                data = @github.repos.contents.get 'Komodo', 'Packages', file
                 contents = Base64.decode64 data["content"]
                 return YAML.load contents 
             end
