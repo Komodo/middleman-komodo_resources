@@ -232,10 +232,10 @@ module Middleman
                     contents = readme["content"]
                     
                     linkPath = resource["html_url"] + "/blob/#{branch}/"
-                    contents = contents.gsub(/<a href="(?!https?:\/\/)"/, "<a href=\"#{linkPath}\"")
+                    contents = contents.gsub(/<a href="(?!https?:\/\/)/, "<a href=\"#{linkPath}")
                     
                     imgPath = resource["html_url"] + "/raw/#{branch}/"
-                    contents = contents.gsub(/<img src="(?!https?:\/\/)"/, "<img src=\"#{imgPath}\"")
+                    contents = contents.gsub(/<img src="(?!https?:\/\/)/, "<img src=\"#{imgPath}")
                     
                     # Github automatically fixes blob urls to raw for images,
                     # so we should too ...
