@@ -11,6 +11,7 @@ gem "faraday-http-cache"
 gem "redcarpet"
 gem "RedCloth"
 gem "mime-types"
+gem "rubyzip"
 
 group :development do
   gem 'rake'

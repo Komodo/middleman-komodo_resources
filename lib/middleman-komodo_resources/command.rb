@@ -166,6 +166,14 @@ module Middleman
                         
                     end #releases loop
                     
+                    # For XPI addons, extract the <em:id> from install.rdf.
+                    # This ID is used for tracking package updates.
+                    begin
+                        url = r["releases"].last["assets"].first["browser_download_url"]
+                        r["manifest_id"] = extract_manifest_id(url) if url =~ /\.xpi$/
+                    rescue Exception => e
+                    end
+                    
                 end # has key releases
                 
                 return r
@@ -410,6 +418,27 @@ print json.dumps(_export)
                 
                 return `python2 #{file.path}`
                 
+            end
+            
+            ##
+            # Addon XPI files have install.rdf manifests that include addon
+            # metadata. The <em:id> field is particularly useful for identifying
+            # addons when checking for updates, rather than relying on its
+            # filename or some other potentially variable field.
+            def extract_manifest_id(url)
+                require 'open-uri'
+                require 'zip'
+                begin
+                    Zip::InputStream.open(open(url)) do |zip|
+                        while f = zip.get_next_entry
+                            return zip.read.scan(/<em:id>([^<]+)/).first.first if f.name == 'install.rdf'
+                        end
+                    end
+                    raise "install.rdf not found or the xpi was unreadable by rubyzip"
+                rescue Exception => e
+                    puts "\nError parsing install.rdf for #{url}: #{e.message}"
+                    raise
+                end
             end
             
             def sanitize(ob, keys)
