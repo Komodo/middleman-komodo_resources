@@ -438,7 +438,11 @@ print json.dumps(_export)
                 begin
                     Zip::InputStream.open(open(url)) do |zip|
                         while f = zip.get_next_entry
-                            return zip.read.scan(/<em:#{tag}>([^<]+)/).first.first if f.name == 'install.rdf'
+                            if f.name == 'install.rdf'
+                                content = zip.read.scan(/<em:#{tag}>([^<]+)/).first.first
+                                content.force_encoding "UTF-8"
+                                return content
+                            end
                         end
                     end
                     raise "install.rdf not found or the xpi was unreadable by rubyzip"
