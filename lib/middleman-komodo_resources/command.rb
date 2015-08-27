@@ -162,6 +162,15 @@ module Middleman
                             r["releases"][i]["assets"].each_with_index() do |_v,_i|
                                 r["releases"][i]["assets"][_i] = sanitize(_v, _fields)
                             end
+                            
+                            # For XPI addons, extract the <em:version> from
+                            # install.rdf. This version is used for tracking
+                            # package updates.
+                            begin
+                                url = r["releases"][i]["assets"].first["browser_download_url"]
+                                r["releases"][i]["version"] = extract_manifest_tag(url, 'version') if url =~ /\.xpi$/
+                            rescue Exception => e
+                            end
                         end
                         
                     end #releases loop
@@ -170,7 +179,7 @@ module Middleman
                     # This ID is used for tracking package updates.
                     begin
                         url = r["releases"].last["assets"].first["browser_download_url"]
-                        r["manifest_id"] = extract_manifest_id(url) if url =~ /\.xpi$/
+                        r["manifest_id"] = extract_manifest_tag(url, 'id') if url =~ /\.xpi$/
                     rescue Exception => e
                     end
                     
@@ -421,17 +430,15 @@ print json.dumps(_export)
             end
             
             ##
-            # Addon XPI files have install.rdf manifests that include addon
-            # metadata. The <em:id> field is particularly useful for identifying
-            # addons when checking for updates, rather than relying on its
-            # filename or some other potentially variable field.
-            def extract_manifest_id(url)
+            # Returns metadata for the given +tag+ in an Addon XPI's install.rdf
+            # manifest.
+            def extract_manifest_tag(url, tag)
                 require 'open-uri'
                 require 'zip'
                 begin
                     Zip::InputStream.open(open(url)) do |zip|
                         while f = zip.get_next_entry
-                            return zip.read.scan(/<em:id>([^<]+)/).first.first if f.name == 'install.rdf'
+                            return zip.read.scan(/<em:#{tag}>([^<]+)/).first.first if f.name == 'install.rdf'
                         end
                     end
                     raise "install.rdf not found or the xpi was unreadable by rubyzip"
