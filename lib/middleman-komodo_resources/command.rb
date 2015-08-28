@@ -178,7 +178,7 @@ module Middleman
                     # For XPI addons, extract the <em:id> from install.rdf.
                     # This ID is used for tracking package updates.
                     begin
-                        url = r["releases"].last["assets"].first["browser_download_url"]
+                        url = r["releases"].first["assets"].first["browser_download_url"]
                         r["manifest_id"] = extract_manifest_tag(url, 'id') if url =~ /\.xpi$/
                     rescue Exception => e
                     end
