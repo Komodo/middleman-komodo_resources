@@ -14,6 +14,7 @@ require 'base64'
 require 'date'
 require 'github/markup'
 require 'mime/types'
+require "resolv-replace.rb"
 
 module Middleman
     module Cli
