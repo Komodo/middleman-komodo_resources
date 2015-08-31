@@ -209,7 +209,6 @@ module Middleman
                     rescue Exception => e
                         puts "\nError parsing readme: #{e.message}"
                         resource.delete("readme")
-                        return false
                     end
                 end
                 
