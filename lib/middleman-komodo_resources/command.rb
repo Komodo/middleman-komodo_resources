@@ -142,7 +142,7 @@ module Middleman
                           "watchers_count", "has_issues", "has_downloads",
                           "forks_count", "open_issues_count", "default_branch",
                           "subscribers_count", "title", "releases", "last_update",
-                          "is_github", "category", "download_count"]
+                          "is_github", "category", "download_count", "manifest_id"]
                 r = sanitize(resource, fields)
                
                 # resource.owner
@@ -152,7 +152,7 @@ module Middleman
                 # resource.releases
                 if r.has_key? "releases" and r["releases"]
                     fields = ["id", "name", "prerelease", "created_at",
-                              "published_at","assets"]
+                              "published_at","assets", "version"]
                     r["releases"].each_with_index() do |v,i|
                         r["releases"][i] = sanitize(v, fields)
                         
@@ -163,27 +163,9 @@ module Middleman
                             r["releases"][i]["assets"].each_with_index() do |_v,_i|
                                 r["releases"][i]["assets"][_i] = sanitize(_v, _fields)
                             end
-                            
-                            # For XPI addons, extract the <em:version> from
-                            # install.rdf. This version is used for tracking
-                            # package updates.
-                            begin
-                                url = r["releases"][i]["assets"].first["browser_download_url"]
-                                r["releases"][i]["version"] = extract_manifest_tag(url, 'version') if url =~ /\.xpi$/
-                            rescue Exception => e
-                            end
                         end
                         
                     end #releases loop
-                    
-                    # For XPI addons, extract the <em:id> from install.rdf.
-                    # This ID is used for tracking package updates.
-                    begin
-                        url = r["releases"].first["assets"].first["browser_download_url"]
-                        r["manifest_id"] = extract_manifest_tag(url, 'id') if url =~ /\.xpi$/
-                    rescue Exception => e
-                    end
-                    
                 end # has key releases
                 
                 return r
@@ -390,7 +372,19 @@ module Middleman
                             end
                         end
                     end
-                rescue Github::Error::ServiceError, Faraday::ConnectionFailed, NoMethodError => e
+                    
+                    # For XPI addons, extract the <em:id> from install.rdf.
+                    # This ID is used for tracking package updates.
+                    begin
+                        if resource["releases"].size > 0
+                            url = resource["releases"].first["assets"].first["browser_download_url"]
+                            resource["manifest_id"] = extract_manifest_tag(url, 'id') if url =~ /\.xpi$/
+                            resource["releases"][0]["version"] = extract_manifest_tag(url, 'version') if url =~ /\.xpi$/
+                        end
+                    rescue Exception => e
+                        puts "\nError parsing manifest id (#{title}): #{e.message}"
+                    end
+                rescue Exception => e
                     puts "\nError retrieving releases (#{title}): #{e.message}"
                 end
                 
