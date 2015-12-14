@@ -194,6 +194,22 @@ module Middleman
                     end
                 end
                 
+                # resource.releases
+                if resource.has_key? "releases" and resource["releases"]
+                    highest = 0
+                    resource["releases"].each_with_index() do |v,i|
+                        begin
+                            id = Integer(resource["releases"][i]["id"])
+                            if id > highest
+                                highest = id
+                            end
+                        rescue ArgumentError
+                        end
+                    end #releases loop
+                    
+                    resource["releases"] = resource["releases"].select { |r| r["id"] == highest }
+                end # has key releases
+                
                 return resource
             end
             
